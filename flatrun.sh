@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Version
-VERSION="0.1.0"
+VERSION="0.1.1"
 
 # Help
 show_help() {
@@ -82,41 +82,60 @@ if [ -z "$apps" ]; then
     exit 1
 fi
 
-matched_id=""
-matched_name=""
-exact_match=""
-
-# Traversal search
-while IFS= read -r line; do
-    id=$(echo "$line" | awk '{print $1}')
-    name=$(echo "$line" | cut -f2-)
-    
-    if [ $case_sensitive -eq 1 ]; then
-        if [[ "$name" == *"$app_query"* ]] || [[ "$id" == *"$app_query"* ]]; then
-            [[ "$name" == "$app_query" || "$id" == "$app_query" ]] && { exact_match="$id"; break; }
-            matched_id="$id"; matched_name="$name"
+# Namespace collision
+mapfile -t matched_ids < <(
+    while IFS= read -r line; do
+        id=$(echo "$line" | awk '{print $1}')
+        name=$(echo "$line" | cut -f2-)
+        
+        if [ $case_sensitive -eq 1 ]; then
+            if [[ "$name" == *"$app_query"* ]] || [[ "$id" == *"$app_query"* ]]; then
+                echo "$id"
+            fi
+        else
+            if [[ "${name,,}" == *"${app_query,,}"* ]] || [[ "${id,,}" == *"${app_query,,}"* ]]; then
+                echo "$id"
+            fi
         fi
-    else
-        if [[ "${name,,}" == *"${app_query,,}"* ]] || [[ "${id,,}" == *"${app_query,,}"* ]]; then
-            [[ "${name,,}" == "${app_query,,}" || "${id,,}" == "${app_query,,}" ]] && { exact_match="$id"; break; }
-            matched_id="$id"; matched_name="$name"
-        fi
-    fi
-done <<< "$apps"
+    done <<< "$apps"
+)
 
-# Determine app's ID
+match_count=${#matched_ids[@]}
+
+# Process match resolt
 final_id=""
-if [ -n "$exact_match" ]; then
-    final_id="$exact_match"
-elif [ -n "$matched_id" ]; then
-    final_id="$matched_id"
-    echo "Running best match: $matched_name ($matched_id)"
-fi
 
-if [ -n "$final_id" ]; then
-    # Run command and pass sub-commands
-    flatpak run "$final_id" "${sub_args[@]}"
-else
+if [ $match_count -eq 0 ]; then
     echo "Error: No matching Flatpak application found for '$app_query'"
     exit 1
+elif [ $match_count -eq 1 ]; then
+    final_id="${matched_ids[0]}"
+else
+    # Check for exact matches (exact matches preferred).
+    for id in "${matched_ids[@]}"; do
+        if [ "$id" == "$app_query" ]; then
+            final_id="$id"
+            break
+        fi
+    done
+
+    # If no exact match is found, proceed to manual selection.
+    if [ -z "$final_id" ]; then
+        echo "Multiple matches found for '$app_query':"
+        PS3="Please select an application (1-$match_count): "
+        select opt in "${matched_ids[@]}"; do
+            if [ -n "$opt" ]; then
+                final_id="$opt"
+                break
+            else
+                echo "Invalid selection."
+            fi
+        done
+    fi
+fi
+
+# Run
+if [ -n "$final_id" ]; then
+    echo "Running: $final_id"
+    flatpak run "$final_id" "${sub_args[@]}"
 fi
