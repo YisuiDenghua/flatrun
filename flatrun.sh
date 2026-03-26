@@ -1,28 +1,34 @@
 #!/usr/bin/env bash
 
-# Show help
+# Version
+VERSION="0.1.0"
+
+# Help
 show_help() {
-    echo "Usage: flatrun [OPTIONS] APP_NAME"
+    echo "Usage: flatrun [OPTIONS] APP_NAME [ -- SUB_COMMANDS]"
     echo "Run a Flatpak application by matching its name or ID."
     echo ""
     echo "Options:"
     echo "  -c    Case-sensitive matching"
+    echo "  -v    Show version information"
     echo "  -h    Show this help message"
     echo ""
     echo "Examples:"
-    echo "  flatrun steam      # Runs com.valvesoftware.Steam"
-    echo "  flatrun blackbox   # Runs com.raggesilver.BlackBox"
-    echo "  flatrun -c Steam   # Only matches 'Steam' exactly (case-sensitive)"
+    echo "  flatrun steam              # Runs com.valvesoftware.Steam"
+    echo "  flatrun -c Steam           # Case-sensitive match"
+    echo "  flatrun vlc -- --version   # Passes --version to VLC"
 }
 
-# Default is case insensitive
+# Default is case-insensitive
 case_sensitive=0
 
-# Parsing parameters
-while getopts ":ch" opt; do
+# Parsing
+while getopts ":chv" opt; do
     case $opt in
-        c)
-            case_sensitive=1
+        c) case_sensitive=1 ;;
+        v)
+            echo "flatrun version $VERSION"
+            exit 0
             ;;
         h)
             show_help
@@ -38,16 +44,37 @@ done
 
 shift $((OPTIND-1))
 
-# Check if an Flatpak app ID is provided
-if [ -z "$1" ]; then
+# Subcommand
+app_query=""
+sub_args=()
+found_divider=false
+
+for arg in "$@"; do
+    if [ "$arg" == "--" ] && [ "$found_divider" = false ]; then
+        found_divider=true
+        continue
+    fi
+
+    if [ "$found_divider" = true ]; then
+        sub_args+=("$arg")
+    else
+        # Search app keywords
+        if [ -z "$app_query" ]; then
+            app_query="$arg"
+        else
+            app_query="$app_query $arg"
+        fi
+    fi
+done
+
+# Check if the app's name is provided.
+if [ -z "$app_query" ]; then
     echo "Error: No application name provided."
     show_help
     exit 1
 fi
 
-app_name="$*"
-
-# Get the Flatpak list
+# Get Flatpak list
 apps=$(flatpak list --columns=application,name 2>/dev/null)
 
 if [ -z "$apps" ]; then
@@ -55,53 +82,41 @@ if [ -z "$apps" ]; then
     exit 1
 fi
 
-# Variables to store matching results
 matched_id=""
 matched_name=""
 exact_match=""
 
-# Read each line information of Flatpak apps
+# Traversal search
 while IFS= read -r line; do
-    # Split ID and app name
     id=$(echo "$line" | awk '{print $1}')
     name=$(echo "$line" | cut -f2-)
     
-    # Check for matching
     if [ $case_sensitive -eq 1 ]; then
-        # Check for case-sensitive matching
-        if [[ "$name" == *"$app_name"* ]] || [[ "$id" == *"$app_name"* ]]; then
-            # Check for exact match
-            if [[ "$name" == "$app_name" ]] || [[ "$id" == "$app_name" ]]; then
-                exact_match="$id"
-                break
-            fi
-            matched_id="$id"
-            matched_name="$name"
+        if [[ "$name" == *"$app_query"* ]] || [[ "$id" == *"$app_query"* ]]; then
+            [[ "$name" == "$app_query" || "$id" == "$app_query" ]] && { exact_match="$id"; break; }
+            matched_id="$id"; matched_name="$name"
         fi
     else
-        # Case-insensitive matching
-        if [[ "${name,,}" == *"${app_name,,}"* ]] || [[ "${id,,}" == *"${app_name,,}"* ]]; then
-            # Check for exact match
-            if [[ "${name,,}" == "${app_name,,}" ]] || [[ "${id,,}" == "${app_name,,}" ]]; then
-                exact_match="$id"
-                break
-            fi
-            matched_id="$id"
-            matched_name="$name"
+        if [[ "${name,,}" == *"${app_query,,}"* ]] || [[ "${id,,}" == *"${app_query,,}"* ]]; then
+            [[ "${name,,}" == "${app_query,,}" || "${id,,}" == "${app_query,,}" ]] && { exact_match="$id"; break; }
+            matched_id="$id"; matched_name="$name"
         fi
     fi
 done <<< "$apps"
 
-# Prefer exact matches to results
+# Determine app's ID
+final_id=""
 if [ -n "$exact_match" ]; then
-    echo "Running exact match: $exact_match"
-    flatpak run "$exact_match"
+    final_id="$exact_match"
 elif [ -n "$matched_id" ]; then
+    final_id="$matched_id"
     echo "Running best match: $matched_name ($matched_id)"
-    flatpak run "$matched_id"
+fi
+
+if [ -n "$final_id" ]; then
+    # Run command and pass sub-commands
+    flatpak run "$final_id" "${sub_args[@]}"
 else
-    echo "Error: No matching Flatpak application found for '$app_name'"
-    echo "Installed applications:"
-    echo "$apps" | awk '{printf "  %-30s %s\n", $1, $2}'
+    echo "Error: No matching Flatpak application found for '$app_query'"
     exit 1
 fi
