@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Version
-VERSION="0.1.1"
+VERSION="0.1.2"
 
 # Help
 show_help() {
@@ -9,13 +9,13 @@ show_help() {
     echo "Run a Flatpak application by matching its name or ID."
     echo ""
     echo "Options:"
-    echo "  -c    Case-sensitive matching"
+    echo "  -c    Case-sensitive matching (disables smart-filtering)"
     echo "  -v    Show version information"
     echo "  -h    Show this help message"
     echo ""
     echo "Examples:"
-    echo "  flatrun steam              # Runs com.valvesoftware.Steam"
-    echo "  flatrun -c Steam           # Case-sensitive match"
+    echo "  flatrun steam              # Smart-matches to com.valvesoftware.Steam"
+    echo "  flatrun -c Steam           # Strict match; might show selection menu"
     echo "  flatrun vlc -- --version   # Passes --version to VLC"
 }
 
@@ -26,19 +26,9 @@ case_sensitive=0
 while getopts ":chv" opt; do
     case $opt in
         c) case_sensitive=1 ;;
-        v)
-            echo "flatrun version $VERSION"
-            exit 0
-            ;;
-        h)
-            show_help
-            exit 0
-            ;;
-        \?)
-            echo "Invalid option: -$OPTARG" >&2
-            show_help
-            exit 1
-            ;;
+        v) echo "flatrun version $VERSION"; exit 0 ;;
+        h) show_help; exit 0 ;;
+        \?) echo "Invalid option: -$OPTARG" >&2; show_help; exit 1 ;;
     esac
 done
 
@@ -54,16 +44,10 @@ for arg in "$@"; do
         found_divider=true
         continue
     fi
-
     if [ "$found_divider" = true ]; then
         sub_args+=("$arg")
     else
-        # Search app keywords
-        if [ -z "$app_query" ]; then
-            app_query="$arg"
-        else
-            app_query="$app_query $arg"
-        fi
+        app_query="${app_query}${app_query:+ }$arg"
     fi
 done
 
@@ -118,6 +102,21 @@ else
             break
         fi
     done
+
+    # Filtler
+    if [ -z "$final_id" ] && [ $case_sensitive -eq 0 ]; then
+        strong_matches=()
+        for id in "${matched_ids[@]}"; do
+            last_part="${id##*.}"
+            if [[ "${last_part,,}" == "${app_query,,}" ]]; then
+                strong_matches+=("$id")
+            fi
+        done
+
+        if [ ${#strong_matches[@]} -eq 1 ]; then
+            final_id="${strong_matches[0]}"
+        fi
+    fi
 
     # If no exact match is found, proceed to manual selection.
     if [ -z "$final_id" ]; then
