@@ -1,7 +1,7 @@
 {
   pkgs,
   lib,
-  version ? "0.1.0",
+  version ? "0.1.1",
 }:
 
 pkgs.stdenv.mkDerivation {
@@ -10,7 +10,7 @@ pkgs.stdenv.mkDerivation {
 
   src = pkgs.fetchzip {
     url = "https://github.com/YisuiDenghua/flatrun/archive/refs/tags/v${version}.tar.gz";
-    sha256 = "sha256-+YUQ7ZKM3NVLoP1G7hvgJX11rguHLcQniO93IuyGltg=";
+    sha256 = "sha256-iICdwOdnvESaolH73miETD89x3FDNmTrwr4WK2ShCyY=";
   };
 
   nativeBuildInputs = [ pkgs.makeWrapper ];
@@ -41,7 +41,7 @@ pkgs.stdenv.mkDerivation {
   meta = with lib; {
     description = "A simple wrapper to run Flatpak apps by matching name or ID";
     homepage = "https://github.com/YisuiDenghua/flatrun";
-    license = licenses.mit; 
+    license = licenses.mit;
     platforms = platforms.linux;
     maintainers = with lib.maintainers; [ yisuidenghua ];
     mainProgram = "flatrun";
