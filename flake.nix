@@ -18,7 +18,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
       in
       {
-        packages.default = pkgs.callPackage ./nix/default.nix { version = "0.1.0"; };
+        packages.default = pkgs.callPackage ./nix/default.nix { version = "0.1.2"; };
 
         apps.default = {
           type = "app";

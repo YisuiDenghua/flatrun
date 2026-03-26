@@ -1,7 +1,7 @@
 {
   pkgs,
   lib,
-  version ? "0.1.1",
+  version ? "0.1.2",
 }:
 
 pkgs.stdenv.mkDerivation {
@@ -10,7 +10,7 @@ pkgs.stdenv.mkDerivation {
 
   src = pkgs.fetchzip {
     url = "https://github.com/YisuiDenghua/flatrun/archive/refs/tags/v${version}.tar.gz";
-    sha256 = "sha256-iICdwOdnvESaolH73miETD89x3FDNmTrwr4WK2ShCyY=";
+    sha256 = "sha256-3ByRRphS0+wgvzI/ETnC5I9TmqgPxWVpIpFMYkBixYE=";
   };
 
   nativeBuildInputs = [ pkgs.makeWrapper ];
